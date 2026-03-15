@@ -88,6 +88,11 @@ DeviceProcessEvents
 | project TimeGenerated, DeviceName, FileName, FolderPath, ProcessCommandLine
 | limit 20
 ```
+**Evidence**
+
+<img width="1013" height="522" alt="Image" src="https://github.com/user-attachments/assets/439721c5-645b-4281-80d5-5cb301a72f12" />
+
+*AnyDesk.exe executing from `C:\Users\Public\` on as-pc2 — a non-standard installation path indicating the attacker manually placed the binary here during The BROKER. Legitimate AnyDesk installations use `C:\Program Files (x86)\AnyDesk\`.*
 
 ```kql
 -- Attacker IP connections across all hosts
@@ -99,6 +104,14 @@ DeviceNetworkEvents
 | limit 20
 ```
 
+**Evidence**
+
+<img width="1348" height="527" alt="Image" src="https://github.com/user-attachments/assets/543a89d2-e5de-4b50-a2e3-f1081b5aa58d" />
+
+*External IP `88.97.164.155` connecting to all three hosts (`as-pc1`, `as-pc2`, `as-srv`) via `AnyDesk.exe` — confirming the attacker had full environment access from a single external IP using pre-staged backdoors.*
+
+
+
 ```kql
 -- Compromised account logons
 DeviceLogonEvents
@@ -108,9 +121,12 @@ DeviceLogonEvents
 | where AccountDomain contains "as-pc2"
 ```
 
-> **Evidence:** *(screenshot — AnyDesk process from C:\Users\Public\)*
+**Evidence**
 
-> **Evidence:** *(screenshot — 88.97.164.155 connections across all three hosts)*
+<img width="1673" height="525" alt="Image" src="https://github.com/user-attachments/assets/5205d1e7-6676-495f-832a-2ad24810a80c" />
+
+*`david.mitchell` successfully authenticating to `as-pc2` multiple times throughout the attack window. This account was disabled prior to The BROKER and re-enabled by the attacker to avoid creating new suspicious accounts.*
+
 
 ---
 
@@ -138,6 +154,14 @@ DeviceProcessEvents
 | limit 20
 ```
 
+**Evidence**
+
+<img width="1631" height="317" alt="Image" src="https://github.com/user-attachments/assets/56725a5d-06d6-411a-9f2b-1bef8d20ec2c" />
+
+*Full process chain: `powershell.exe` → `scan.exe` → `scan.tmp` → `advanced_ip_scanner.exe`. The `/portable` flag runs the scanner with no installation footprint — no registry entries, no Start Menu entry, easily deleted after use.*
+
+
+
 ```kql
 -- bitsadmin download attempts
 DeviceProcessEvents
@@ -149,9 +173,13 @@ DeviceProcessEvents
 | limit 20
 ```
 
-> **Evidence:** *(screenshot — advanced_ip_scanner.exe execution with /portable arguments)*
+**Evidence**
 
-> **Evidence:** *(screenshot — bitsadmin download attempts)*
+<img width="1626" height="427" alt="Image" src="https://github.com/user-attachments/assets/aab6fabb-f419-4116-9308-4e1d1e696862" />
+
+*`bitsadmin.exe` attempting to download `scan.exe` to multiple staging paths before succeeding. The final row shows `wsync.exe` using the same LOLBin to download `kill.bat` from `sync.cloud-endpoint.net` — confirming the C2 domain was used for both tool delivery and payload staging.*
+
+
 
 ---
 
@@ -180,6 +208,14 @@ DeviceFileEvents
 | limit 10
 ```
 
+**Evidence**
+
+<img width="1527" height="370" alt="Image" src="https://github.com/user-attachments/assets/47cb7df2-7b14-47d6-8770-01312bf21cfa" />
+
+*`wsync.exe` first created at `20:22:50` UTC with SHA256 `66b876c52946...` — the original unstable beacon staged to `C:\ProgramData\` via PowerShell. The second row shows the replacement at `20:44:07` with no SHA256, logged as a FileModified event.*
+
+
+
 ```kql
 -- Replacement beacon (FileModified = overwrite)
 DeviceFileEvents
@@ -192,6 +228,14 @@ DeviceFileEvents
 | limit 10
 ```
 
+**Evidence**
+
+<img width="1532" height="340" alt="Image" src="https://github.com/user-attachments/assets/0a8f4eab-8a8d-412c-89ca-675b1ed0579c" />
+
+*`wsync.exe` overwritten at `20:44:32` UTC with the final Akira ransomware binary — SHA256 `0072ca0d0adc...`. The `FileModified` action type confirms this was an overwrite of the original beacon rather than a new file creation.*
+
+
+
 ```kql
 -- C2 network connections
 DeviceNetworkEvents
@@ -202,9 +246,13 @@ DeviceNetworkEvents
 | order by TimeGenerated asc
 ```
 
-> **Evidence:** *(screenshot — wsync.exe FileCreated and FileModified events with hashes)*
+**Evidence**
 
-> **Evidence:** *(screenshot — cloud-endpoint.net C2 connections)*
+<img width="1232" height="477" alt="Image" src="https://github.com/user-attachments/assets/8151c81f-fe28-4dcf-a4ed-d1f4c560840e" />
+
+*`sync.cloud-endpoint.net` resolving to both Cloudflare-proxied IPs throughout the attack window. The final two rows show `wsync.exe` making C2 callbacks post-execution — confirming the ransomware binary actively communicated with attacker infrastructure after deployment.*
+
+
 
 ---
 
@@ -231,6 +279,13 @@ DeviceProcessEvents
 | limit 20
 ```
 
+**Evidence**
+
+<img width="1271" height="452" alt="Image" src="https://github.com/user-attachments/assets/05102b7e-e49f-4b50-b7cf-e034df641a9c" />
+*`wsync.exe` spawning `cmd.exe /c C:\ProgramData\kill.bat` at `21:03:36` UTC — confirming the ransomware binary was directly responsible for dropping and executing the defense evasion script.*
+
+
+
 ```kql
 -- Defender disable commands
 DeviceProcessEvents
@@ -240,6 +295,13 @@ DeviceProcessEvents
 | project TimeGenerated, DeviceName, FileName, ProcessCommandLine, InitiatingProcessFileName
 | limit 50
 ```
+
+**Evidence**
+
+<img width="1592" height="585" alt="Image" src="https://github.com/user-attachments/assets/c88e5349-ebe0-46b6-a823-ecd8cbc7cd4b" />
+*`kill.bat` systematically disabling Windows Defender through multiple `Set-MpPreference` commands via PowerShell. The two highlighted `reg.exe` rows represent permanent registry-level modifications — more durable than the PowerShell preference changes and not reversible without manual intervention.*
+
+
 
 ```kql
 -- Registry tampering
@@ -252,6 +314,14 @@ DeviceRegistryEvents
 | limit 20
 ```
 
+**Evidence**
+
+<img width="1700" height="558" alt="Image" src="https://github.com/user-attachments/assets/47b7c9d6-9e80-41e0-be64-1e34d2d8e1b4" />
+
+*`DisableAntiSpyware` registry value set to `1` at `HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows Defender` at `21:03:42` UTC — permanently disabling Windows Defender at the Group Policy layer via `reg.exe`.*
+
+
+
 ```kql
 -- Shadow copy deletion
 DeviceProcessEvents
@@ -263,13 +333,14 @@ DeviceProcessEvents
 | limit 20
 ```
 
-> **Evidence:** *(screenshot — cmd.exe /c kill.bat initiated by wsync.exe)*
+**Evidence**
 
-> **Evidence:** *(screenshot — Set-MpPreference commands)*
+<img width="1322" height="388" alt="Image" src="https://github.com/user-attachments/assets/749b54ce-c90b-4812-89e2-e085717acbc6" />
 
-> **Evidence:** *(screenshot — DisableAntiSpyware registry modification)*
+*Two shadow copy deletion methods executed in sequence at `21:09:10` UTC — `vssadmin delete shadows /all /quiet` and `wmic shadowcopy delete`. Both initiated by `wsync.exe` via `cmd.exe`, eliminating all native Windows recovery points before encryption began.*
 
-> **Evidence:** *(screenshot — vssadmin delete shadows)*
+
+
 
 ---
 
@@ -294,20 +365,34 @@ DeviceProcessEvents
 | limit 20
 ```
 
+**Evidence**
+
+<img width="1288" height="382" alt="Image" src="https://github.com/user-attachments/assets/503e8c1c-0045-40fd-b5c3-ce9d1820d0cf" />
+
+*`cmd.exe /c "tasklist | findstr lsass"` executed twice by `wsync.exe` — confirming LSASS was running before initiating the memory dump. The case-sensitive `findstr Lsass` usage reflects operator familiarity with Windows process naming conventions.*
+
+
+
 ```kql
 -- Named pipe access
 DeviceEvents
-| where TimeGenerated between (datetime(2026-01-27T21:40:00Z) .. datetime(2026-01-27T21:50:00Z))
+| where TimeGenerated between (datetime(2026-01-27T21:00:00Z) .. datetime(2026-01-27T22:00:00Z))
 | where DeviceName =~ "AS-PC2"
 | where ActionType == "NamedPipeEvent"
-| where InitiatingProcessFileName in~ ("wsync.exe", "powershell.exe", "rundll32.exe", "cmd.exe")
+| where AdditionalFields has "lsass"
+| where InitiatingProcessFileName != "lsass.exe"
 | project TimeGenerated, DeviceName, InitiatingProcessFileName, AdditionalFields
 | limit 20
 ```
 
-> **Evidence:** *(screenshot — tasklist | findstr Lsass command)*
+**Evidence**
 
-> **Evidence:** *(screenshot — \Device\NamedPipe\lsass access event)*
+<img width="1692" height="432" alt="Image" src="https://github.com/user-attachments/assets/270ac27a-247d-4047-b641-5bc323b85cd4" />
+
+*`\Device\NamedPipe\lsass` accessed at `21:42:56` UTC by a non-LSASS process as a Client — the standard precursor to an LSASS memory dump. The LSASS memory read followed three minutes later at `21:45:38` UTC capturing 25KB of credential material across 201 reads.*
+
+
+
 
 ---
 
@@ -334,7 +419,14 @@ DeviceLogonEvents
 | limit 20
 ```
 
-> **Evidence:** *(screenshot — as.srv.administrator and david.mitchell logon events on as-srv)*
+**Evidence**
+
+<img width="1376" height="555" alt="Image" src="https://github.com/user-attachments/assets/0ac0949b-bd6b-4fe9-8ebd-31bdcadc005b" />
+
+*`as.srv.administrator` authenticating to `as-srv` via RemoteInteractive (RDP) from `10.0.8.9` — the Guacamole relay subnet. `david.mitchell` subsequently authenticating via Network logon from `10.1.0.183` (as-pc2) — both compromised accounts used to establish full control of the file server.*
+
+
+
 
 ---
 
@@ -361,7 +453,13 @@ DeviceFileEvents
 | limit 20
 ```
 
-> **Evidence:** *(screenshot — exfil_data.zip created by st.exe)*
+**Evidence**
+
+<img width="1305" height="556" alt="Image" src="https://github.com/user-attachments/assets/26f25cdd-2920-47ca-8320-8dbc0f15c34a" />
+
+*`st.exe` creating `exfil_data.zip` at `C:\Users\Public\exfil_data.zip` on `as-srv` at `22:24:09` UTC — six minutes after encryption began. The `C:\Users\Public\` staging location was used consistently across both investigations as a shared, writable directory accessible to any local account.*
+
+
 
 ---
 
@@ -392,6 +490,14 @@ DeviceProcessEvents
 | limit 20
 ```
 
+**Evidence**
+
+<img width="1537" height="573" alt="Image" src="https://github.com/user-attachments/assets/6e6b4a59-462d-431b-829c-2d42b48e75c0" />
+
+*`updater.exe` executed from `C:\ProgramData\` on `as-srv` at `22:18:29` UTC, staged by `powershell.exe`. The binary masquerades as a legitimate Google Updater process — deployed after two failed `wsync.exe` execution attempts on the file server.*
+
+
+
 ```kql
 -- Ransom note drop
 DeviceFileEvents
@@ -402,6 +508,13 @@ DeviceFileEvents
 | order by TimeGenerated asc
 | limit 20
 ```
+
+**Evidence**
+
+<img width="1612" height="421" alt="Image" src="https://github.com/user-attachments/assets/03f1472e-8edb-4053-84f3-e52b69371ce4" />
+
+*Three `akira_readme.txt` ransom notes dropped simultaneously at `22:18:33` UTC by `updater.exe` across the Desktop, Documents, and Downloads directories of `AS.SRV.Administrator` — marking the confirmed start of encryption on `as-srv`.*
+
 
 ```kql
 -- Cleanup script
@@ -414,11 +527,14 @@ DeviceFileEvents
 | limit 20
 ```
 
-> **Evidence:** *(screenshot — updater.exe deployed by powershell.exe on as-srv)*
+**Evidence**
 
-> **Evidence:** *(screenshot — akira_readme.txt dropped at 22:18:33)*
+<img width="1300" height="463" alt="Image" src="https://github.com/user-attachments/assets/6a186fa9-b935-4f40-9eb5-c92d51c1d576" />
 
-> **Evidence:** *(screenshot — clean.bat at 22:20:27)*
+*`clean.bat` created at `C:\ProgramData\clean.bat` on `as-srv` at `22:20:27` UTC by `powershell.exe` — two minutes after encryption began. Designed to delete the ransomware binary post-execution, removing the primary forensic artifact from disk.*
+
+
+
 
 ---
 
