@@ -633,4 +633,4 @@ Mapping the environment early is something I would prioritize differently next t
 
 ---
 
-*This report was produced as part of a controlled Cyber Range scenario provided by SancLogic. All systems, users, files, and IP addresses are simulated.*
+*This report was produced as part of a controlled scenario provided by SancLogic. All systems, users, files, and IP addresses are simulated.*
